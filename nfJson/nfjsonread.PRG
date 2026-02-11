@@ -664,8 +664,19 @@ Function isjsondt( cstr )
 
 cstr = Rtrim(m.cstr,1,'Z')
 
-Return Iif( Len(m.cstr) = 19 ;
+*** DH 2026-01-02: handle 2017-03-10T17:43:55.123
+*Return Iif( Len(m.cstr) = 19 ;
 	and Len(Chrtran(m.cstr,'01234567890:T-','')) = 0 ;
+	and Substr(m.cstr,5,1) = '-' ;
+	and Substr(m.cstr,8,1) = '-' ;
+	and Substr(m.cstr,11,1) = 'T' ;
+	and Substr(m.cstr,14,1) = ':' ;
+	and Substr(m.cstr,17,1) = ':' ;
+	and Occurs('T',m.cstr) = 1 ;
+	and Occurs('-',m.cstr) = 2 ;
+	and Occurs(':',m.cstr) = 2 ,.T.,.F. )
+Return Iif((Len(m.cstr) = 19 or Len(m.cstr) = 23) ;
+	and Len(Chrtran(m.cstr,'01234567890:T-.','')) = 0 ;
 	and Substr(m.cstr,5,1) = '-' ;
 	and Substr(m.cstr,8,1) = '-' ;
 	and Substr(m.cstr,11,1) = 'T' ;

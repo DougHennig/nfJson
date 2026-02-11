@@ -136,6 +136,15 @@ BROWSE TITLE 'Using nfOpenJson'
 
 ## Release Notes
 
+2026/02/11 (DougHennig)
+* nfJsonRead: handle dates with thousandths of seconds, such as 2017-03-10T17:43:55.123
+* nfJsonCreate:
+    * Accept an array of properties. The first column is the property name, the case of which is used in the JSON (for example, output as "myProperty" rather than  "myproperty"), and the second is .T. to exclude the property or .F. to include it
+    * Handle collections better: don't add {"collectionitems": ... }
+    * Don't add a extra comma at the start of a property
+    * Don't add a second name to the JSON
+    * Don't add a duplicate }
+
 2022/07/09 ( PatrickvonDeetzen )
 * create json with special characters is now significantly faster (changes made in function "escapeandencode")
 * updated performance test & added new test sample
