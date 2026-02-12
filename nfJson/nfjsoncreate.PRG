@@ -191,8 +191,9 @@ else
 
 		case m.esarray
 
-*** DH 2026-02-12: add comma if necessary
+*** DH 2026-02-12: add comma if necessary and the name
 			este = m.este + iif(empty(m.este), '', ',') + m.xtabs
+			este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
 
 *** DH 2026-02-12: pass taProperties and tlNoCollectionName
 *			procarray(m.obt,m.var,m.nonullarrayitem)

@@ -17,11 +17,14 @@ Project developer: Marco Plaza  [GitHub/nfoxdev](https://github.com/nfoxdev)
  ? vfpobj.age    && 30     
  ? vfpobj.family.son  && Tom
 
-*lReviveCollections: nfJsoncreate stringify key/keyless kcollections as arrays; set this flag if you are parsing json created with nfjsoncreate that
+    * lReviveCollections: nfJsoncreate stringify key/keyless kcollections as arrays; set this flag if you are parsing json created with nfjsoncreate that
 you know have a vfp collection; this will  perform a extra step to get your collections back from the array representation ( revive it ) or set it to
 false to view your collections as arrays for debugging purposes  -check collectiontest.prg in test folder.
 
-* cJsonString = **nfJsonCreate(**oVfp, _lFormattedOutput, lNoNullArrayItems,cRootName,aMembersFlag_**)**
+* cJsonString = **nfJsonCreate(**oVfp, _lFormattedOutput, lNoNullArrayItems,cRootName,aMembersFlag_, tlNoCollectionName, taProperties**)**
+
+    * tlNoCollectionName: .F. or not passed means collections are given a name like *propertyname*_kv_collection. .T. means collections are not assign new names. See the CollectionTest2.prg test program.
+    * taProperties: an optional array that specifies how to handle certain properties. See the PropertyNameCase.prg, IncludeNativeNames.prg, and HandlEmptyValues.prg test programs.
 
 * **nfJsonToCursor(**cJson, _cCursorName ,  lForceImportFromArray_**)** ( creates cursor back from Json created using nfCursorToJson4vfp,
  for any other case see nfOpenJson and notes below: )
