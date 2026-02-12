@@ -14,21 +14,14 @@ loItem.Address.PostalCode = 'H0H 0H0'
 lcJSON = nfJSONCreate(loItem, .T.)
 messagebox(lcJSON, 0, 'JSON Using Default Case')
 
-dimension laProperties[7, 2]
+dimension laProperties[7, 4]
 laProperties[1, 1] = 'Date'
-laProperties[1, 2] = .F.
 laProperties[2, 1] = 'ID'
-laProperties[2, 2] = .F.
 laProperties[3, 1] = 'Address'
-laProperties[3, 2] = .F.
 laProperties[4, 1] = 'City'
-laProperties[4, 2] = .F.
 laProperties[5, 1] = 'Region'
-laProperties[5, 2] = .F.
 laProperties[6, 1] = 'Country'
-laProperties[6, 2] = .F.
 laProperties[7, 1] = 'PostalCode'
-laProperties[7, 2] = .F.
 
 lcJSON = nfJSONCreate(loItem, .T., , , , , @laProperties)
 messagebox(lcJSON, 0, 'JSON Using Specified Property Case')

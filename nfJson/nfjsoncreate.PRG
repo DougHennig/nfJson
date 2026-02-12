@@ -17,10 +17,14 @@
 * v. 1.122 - 2024/06//18 - workaround for a minor issue with a bug in vfp9 09.00.0000.2412
 * v. 1.123 - 2024/08/14 - escapeandencode - bug mapping chars asc 21 to asc 31 as decimal, corrected as hex. ( thks2 @mPeirse )
 *-------------------------------------------------------------------------------------------
-*** DH 2026-01-02: accept an array of properties. The first column is the property name,
-*		the case of which is used in the JSON, and the second is .T. to exclude the
-*		property or .F. to include it
-*** DH 2026-02-12: accept a flag indicating that collections are not assign new names using collTagName
+*** DH 2026-02-12:	Accept an array of properties. The first column is the property name,
+***					the case of which is used in the JSON, the second is a comma-delimited
+***					list of the names of the members this applies to , the third is .T. to
+***					exclude the property or .F. to include it, and the fourth is how to handle
+***					the property if its value is empty: 0 = include it as is in the JSON,
+***					1 = use null as the value, 2 = omit the property from the JSON.
+***					Also, accept a flag indicating that collections are not assign new names
+***					using collTagName
 *parameters ovfp,formattedOutput,nonullarrayitem,crootName,aMembersFlag
 parameters ovfp,formattedOutput,nonullarrayitem,crootName,aMembersFlag, tlNoCollectionName, taProperties
 
@@ -132,31 +136,47 @@ else
 
 	nm = alen(am)
 
-*** DH 2026-01-02: see if taProperties passed
+*** DH 2026-20-12:	add members specified in taProperties that we aren't excluding and
+***					belong to this class
 	llHaveProperties = type('taProperties', 1) = 'A'
+	if llHaveProperties
+		for x1 = 1 to alen(taProperties, 1)
+			if not taProperties[x1, 3] and ;
+				ascan(m.am, taProperties[x1, 1], -1, -1, 1, 15) = 0 and ;
+				pemstatus(m.obt, taProperties[x1, 1], 5) and ;
+				(empty(taProperties[x1, 2]) or ;
+					',' + upper(obt.Name) + ',' $ ',' + upper(taProperties[x1, 2]) + ',')
+				nm = nm + 1
+				dimension am[nm]
+				am[nm] = taProperties[x1, 1]
+			endif not taProperties[x1, 3] ...
+		next x1
+	endif llHaveProperties
+*** DH 2026-20-12: end of new code
 
 	for x1 = 1 to m.nm
 
 		var = lower(am(m.x1))
 
-*** DH 2026-01-02: find the property name in taProperties, omit it if necessary, and use the specified case
+*** DH 2026-02-12:	find the property name in taProperties, omit it if we're excluding it,
+***					use the specified case, and determine how to handle it.
+		lnHowToHandle = 0
 		if llHaveProperties
 			lnRow = ascan(taProperties, var, -1, -1, 1, 15)
 			do case
 				case lnRow = 0
-				case taProperties[lnRow, 2]
+				case taProperties[lnRow, 3]
 					loop
 				otherwise
 					var = taProperties[lnRow, 1]
+					lnHowToHandle = evl(taProperties[lnRow, 4], 0)
 			endcase
 		endif llHaveProperties
 *** DH 2026-01-02: end of new code
 
-*** DH 2026-01-02: only add a comma if we already have a value
+*** DH 2026-02-12: we'll add a comma and the name later if we're not omitting this property
 *		este = m.este+iif(m.x1>1,',','')+m.xtabs
-		este = m.este + iif(empty(m.este), '', ',') + m.xtabs
-
-		este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
+*		este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
 
 		esobjeto = type('m.obt.&Var')='O'
 
@@ -171,6 +191,9 @@ else
 
 		case m.esarray
 
+*** DH 2026-02-12: add comma if necessary
+			este = m.este + iif(empty(m.este), '', ',') + m.xtabs
+
 *** DH 2026-02-12: pass taProperties and tlNoCollectionName
 *			procarray(m.obt,m.var,m.nonullarrayitem)
 			procarray(m.obt,m.var,m.nonullarrayitem, @taProperties, tlNoCollectionName)
@@ -182,6 +205,24 @@ else
 			bc = iif(type('m.thiso.baseclass')='C',m.thiso.baseclass,'?')
 
 			if bc = 'Collection'
+
+*** DH 2026-02-12:	handle the value if there are no members: lnHowToHandle = 0
+***					means output an empty array, 1 means output null, and 2
+***					means omit it from the JSON. Also, output a comma and the name
+				do case
+					case thiso.Count > 0
+					case lnHowToHandle = 1
+						thiso = NULL
+					case lnHowToHandle = 2
+						loop
+				endcase
+				este = m.este + iif(empty(m.este), '', ',') + m.xtabs
+				este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
+				if isnull(thiso)
+					este = m.este + [null]
+					loop
+				endif isnull(thiso)
+*** DH 2026-02-12: end of new code
 
 *** DH 2026-02-12: don't add new tag name if tlNoCollectionName is .T.
 *				este = rtrim(m.este,1,'":')+ collTagName( m.thiso )+'":'
@@ -199,6 +240,10 @@ else
 
 			else
 
+*** DH 2026-02-12: add comma if necessary and the name
+				este = m.este + iif(empty(m.este), '', ',') + m.xtabs
+				este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
+
 *** DH 2026-02-12: pass taProperties and tlNoCollectionName
 *				este =  m.este+[{]+procobject(m.obt.&var,.f.,m.nonullarrayitem,m.amembersFlag)+[}]
 				este =  m.este+[{]+procobject(m.obt.&var,.f.,m.nonullarrayitem,m.amembersFlag, @taProperties, tlNoCollectionName)+[}]
@@ -207,8 +252,22 @@ else
 
 		otherwise
 
-			este = m.este+concatval(m.obt.&var)
-
+*** DH 2026-02-12:	handle the value if there are no members: lnHowToHandle = 0
+***					means output an empty value, 1 means output null, and 2
+***					means omit it from the JSON. Also, output a comma and the name
+*			este = m.este+concatval(m.obt.&var)
+			luValue = m.obt.&var
+			do case
+				case not empty(luValue)
+				case lnHowToHandle = 1
+					luValue = NULL
+				case lnHowToHandle = 2
+					loop
+			endcase
+			este = m.este + iif(empty(m.este), '', ',') + m.xtabs
+			este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
+			este = m.este+concatval(luValue)
+*** DH 2026-02-12: end of new code
 		endcase
 
 	endfor
