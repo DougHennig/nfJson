@@ -11,12 +11,22 @@
 *   check amembers topic on vfp help file for usage
 * changed cr to crlf
 * Added Json validation ; throws error for invalid Json.
+
 * v. 1.120 encode control characters ( chr(0) ~ chr(31) )
 * v. 1.121 - 2023/07/26 - minor optimization ( escapeandencode() )
 * v. 1.122 - 2024/06//18 - workaround for a minor issue with a bug in vfp9 09.00.0000.2412
 * v. 1.123 - 2024/08/14 - escapeandencode - bug mapping chars asc 21 to asc 31 as decimal, corrected as hex. ( thks2 @mPeirse )
 *-------------------------------------------------------------------------------------------
-parameters ovfp,formattedOutput,nonullarrayitem,crootName,aMembersFlag
+*** DH 2026-02-12:	Accept an array of properties. The first column is the property name,
+***					the case of which is used in the JSON, the second is a comma-delimited
+***					list of the names of the members this applies to , the third is .T. to
+***					exclude the property or .F. to include it, and the fourth is how to handle
+***					the property if its value is empty: 0 = include it as is in the JSON,
+***					1 = use null as the value, 2 = omit the property from the JSON.
+***					Also, accept a flag indicating that collections are not assign new names
+***					using collTagName
+*parameters ovfp,formattedOutput,nonullarrayitem,crootName,aMembersFlag
+parameters ovfp,formattedOutput,nonullarrayitem,crootName,aMembersFlag, tlNoCollectionName, taProperties
 
 #define crlf chr(13)+Chr(10)
 
@@ -43,17 +53,23 @@ case esarray
 
 	addproperty(ojson,'array(1)')
 	acopy(ovfp,ojson.array)
-	cjson = procobject(ojson,.f.,m.nonullarrayitem,m.amembersFlag)
+*** DH 2026-02-12: pass taProperties and tlNoCollectionName
+*	cjson = procobject(ojson,.f.,m.nonullarrayitem,m.amembersFlag)
+	cjson = procobject(ojson,.f.,m.nonullarrayitem,m.amembersFlag, @taProperties, tlNoCollectionName)
 	cJson = substr( m.cJson,at('[',m.cJson))
 
 case type('oVfp.BaseClass')='C' and ovfp.baseclass = 'Collection'
-	cjson = procobject(ovfp,.t.,m.nonullarrayitem,m.amembersFlag)
+*** DH 2026-02-12: pass taProperties and tlNoCollectionName
+*	cjson = procobject(ovfp,.t.,m.nonullarrayitem,m.amembersFlag)
+	cjson = procobject(ovfp,.t.,m.nonullarrayitem,m.amembersFlag, @taProperties, tlNoCollectionName)
 
 	cRootName    = evl(m.cRootName,'collection')
 	cjson = '{"'+m.cRootName+collTagName(oVfp)+'": '+cjson+'}'+IIF(formattedoutput,crlf,'')+'}'
 
 otherwise
-	cjson = '{'+procobject(ovfp,.f.,m.nonullarrayitem,m.amembersFlag)+'}'
+*** DH 2026-02-12: pass taProperties and tlNoCollectionName
+*	cjson = '{'+procobject(ovfp,.f.,m.nonullarrayitem,m.amembersFlag)+'}'
+	cjson = '{'+procobject(ovfp,.f.,m.nonullarrayitem,m.amembersFlag, @taProperties, tlNoCollectionName)+'}'
 
 endcase
 
@@ -67,7 +83,9 @@ function collTagName(thiscoll)
 return iif( m.thiscoll.Count > 0 And !Empty( m.thiscoll.GetKey(1) ), '_kv_collection','_kl_collection' )
 
 *----------------------------------------------------------------------------------
-function procobject(obt,iscollection,nonullarrayitem,amembersFlag)
+*** DH 2026-02-12: accept taProperties and tlNoCollectionName
+*function procobject(obt,iscollection,nonullarrayitem,amembersFlag)
+function procobject(obt,iscollection,nonullarrayitem,amembersFlag, taProperties, tlNoCollectionName)
 *----------------------------------------------------------------------------------
 
 if isnull(m.obt)
@@ -86,11 +104,23 @@ iscollection =  bc = 'Collection'
 
 if m.iscollection
 
-	este = m.este+'{ '+m.xtabs
-	xtabs = nivel(2)
-	este = m.este+'"collectionitems": ['+m.xtabs
+*** DH 2026-02-12: don't add { and "collectionitems" if tlNoCollectionName is .T.
+*	este = m.este+'{ '+m.xtabs
+*	xtabs = nivel(2)
+*	este = m.este+'"collectionitems": ['+m.xtabs
+	if tlNoCollectionName
+		xtabs = nivel(2)
+		este = m.este + '[' + m.xtabs
+	else
+		este = m.este+'{ '+m.xtabs
+		xtabs = nivel(2)
+		este = m.este+'"collectionitems": ['+m.xtabs
+	endif tlNoCollectionName
+*** DH 2026-02-12: end of change
 
-	procCollection(obt,m.noNullArrayItem,m.amembersFlag)
+*** DH 2026-02-12: pass taProperties and tlNoCollectionName
+*	procCollection(obt,m.noNullArrayItem,m.amembersFlag)
+	procCollection(obt,m.noNullArrayItem,m.amembersFlag, @taProperties, tlNoCollectionName)
 
 	xtabs = nivel(-2)
 	este  = m.este+m.xtabs+']'
@@ -106,13 +136,47 @@ else
 
 	nm = alen(am)
 
+*** DH 2026-20-12:	add members specified in taProperties that we aren't excluding and
+***					belong to this class
+	llHaveProperties = type('taProperties', 1) = 'A'
+	if llHaveProperties
+		for x1 = 1 to alen(taProperties, 1)
+			if not taProperties[x1, 3] and ;
+				ascan(m.am, taProperties[x1, 1], -1, -1, 1, 15) = 0 and ;
+				pemstatus(m.obt, taProperties[x1, 1], 5) and ;
+				(empty(taProperties[x1, 2]) or ;
+					',' + upper(obt.Name) + ',' $ ',' + upper(taProperties[x1, 2]) + ',')
+				nm = nm + 1
+				dimension am[nm]
+				am[nm] = taProperties[x1, 1]
+			endif not taProperties[x1, 3] ...
+		next x1
+	endif llHaveProperties
+*** DH 2026-20-12: end of new code
+
 	for x1 = 1 to m.nm
 
 		var = lower(am(m.x1))
 
-		este = m.este+iif(m.x1>1,',','')+m.xtabs
+*** DH 2026-02-12:	find the property name in taProperties, omit it if we're excluding it,
+***					use the specified case, and determine how to handle it.
+		lnHowToHandle = 0
+		if llHaveProperties
+			lnRow = ascan(taProperties, var, -1, -1, 1, 15)
+			do case
+				case lnRow = 0
+				case taProperties[lnRow, 3]
+					loop
+				otherwise
+					var = taProperties[lnRow, 1]
+					lnHowToHandle = evl(taProperties[lnRow, 4], 0)
+			endcase
+		endif llHaveProperties
+*** DH 2026-01-02: end of new code
 
-		este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
+*** DH 2026-02-12: we'll add a comma and the name later if we're not omitting this property
+*		este = m.este+iif(m.x1>1,',','')+m.xtabs
+*		este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
 
 		esobjeto = type('m.obt.&Var')='O'
 
@@ -127,7 +191,13 @@ else
 
 		case m.esarray
 
-			procarray(m.obt,m.var,m.nonullarrayitem)
+*** DH 2026-02-12: add comma if necessary and the name
+			este = m.este + iif(empty(m.este), '', ',') + m.xtabs
+			este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
+
+*** DH 2026-02-12: pass taProperties and tlNoCollectionName
+*			procarray(m.obt,m.var,m.nonullarrayitem)
+			procarray(m.obt,m.var,m.nonullarrayitem, @taProperties, tlNoCollectionName)
 
 		case m.esobjeto
 
@@ -137,20 +207,68 @@ else
 
 			if bc = 'Collection'
 
-				este = rtrim(m.este,1,'":')+ collTagName( m.thiso )+'":'
+*** DH 2026-02-12:	handle the value if there are no members: lnHowToHandle = 0
+***					means output an empty array, 1 means output null, and 2
+***					means omit it from the JSON. Also, output a comma and the name
+				do case
+					case thiso.Count > 0
+					case lnHowToHandle = 1
+						thiso = NULL
+					case lnHowToHandle = 2
+						loop
+				endcase
+				este = m.este + iif(empty(m.este), '', ',') + m.xtabs
+				este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
+				if isnull(thiso)
+					este = m.este + [null]
+					loop
+				endif isnull(thiso)
+*** DH 2026-02-12: end of new code
 
-				este =  m.este+procobject(m.obt.&var,.t.,m.nonullarrayitem,m.amembersFlag)+[}]
+*** DH 2026-02-12: don't add new tag name if tlNoCollectionName is .T.
+*				este = rtrim(m.este,1,'":')+ collTagName( m.thiso )+'":'
+				if tlNoCollectionName
+					este = rtrim(m.este,1,'":') + '":'
+				else
+					este = rtrim(m.este,1,'":')+ collTagName( m.thiso )+'":'
+				endif tlNoCollectionName
+*** DH 2026-02-12: end of change
+
+*** DH 2026-02-12: pass taProperties and don't add closing } if tlNoCollectionName is .T.
+*				este =  m.este+procobject(m.obt.&var,.t.,m.nonullarrayitem,m.amembersFlag)+[}]
+				este =  m.este+procobject(m.obt.&var,.t.,m.nonullarrayitem,m.amembersFlag, @taProperties, tlNoCollectionName) + ;
+					iif(tlNoCollectionName, '', [}])
 
 			else
 
-				este =  m.este+[{]+procobject(m.obt.&var,.f.,m.nonullarrayitem,m.amembersFlag)+[}]
+*** DH 2026-02-12: add comma if necessary and the name
+				este = m.este + iif(empty(m.este), '', ',') + m.xtabs
+				este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
+
+*** DH 2026-02-12: pass taProperties and tlNoCollectionName
+*				este =  m.este+[{]+procobject(m.obt.&var,.f.,m.nonullarrayitem,m.amembersFlag)+[}]
+				este =  m.este+[{]+procobject(m.obt.&var,.f.,m.nonullarrayitem,m.amembersFlag, @taProperties, tlNoCollectionName)+[}]
 
 			endif
 
 		otherwise
 
-			este = m.este+concatval(m.obt.&var)
-
+*** DH 2026-02-12:	handle the value if there are no members: lnHowToHandle = 0
+***					means output an empty value, 1 means output null, and 2
+***					means omit it from the JSON. Also, output a comma and the name
+*			este = m.este+concatval(m.obt.&var)
+			luValue = m.obt.&var
+			do case
+				case not empty(luValue)
+				case lnHowToHandle = 1
+					luValue = NULL
+				case lnHowToHandle = 2
+					loop
+			endcase
+			este = m.este + iif(empty(m.este), '', ',') + m.xtabs
+			este = m.este+["]+strtran(m.var,'_vfpsafe_','')+[":]
+			este = m.este+concatval(luValue)
+*** DH 2026-02-12: end of new code
 		endcase
 
 	endfor
@@ -163,7 +281,9 @@ endif
 return m.este
 
 *----------------------------------------------------
-procedure procarray(obt,arrayName,nonullarrayitem)
+*** DH 2026-02-12: accept taProperties and tlNoCollectionName
+*procedure procarray(obt,arrayName,nonullarrayitem)
+procedure procarray(obt,arrayName,nonullarrayitem, taProperties, tlNoCollectionName)
 *----------------------------------------------------
 nrows = alen(m.obt.&arrayName,1)
 ncols = alen(m.obt.&arrayName,2)
@@ -210,13 +330,17 @@ do while m.nelem <= m.titems
 
 				este = m.este+' { "collection'+ collTagName( m.elem )+'":'
 
-   				este =  m.este+procobject(m.elem ,.t.,m.nonullarrayitem,m.amembersFlag)
+*** DH 2026-02-12: pass taProperties and tlNoCollectionName
+*   				este =  m.este+procobject(m.elem ,.t.,m.nonullarrayitem,m.amembersFlag)
+   				este =  m.este+procobject(m.elem ,.t.,m.nonullarrayitem,m.amembersFlag, @taProperties, tlNoCollectionName)
 
 				este = m.este + '}'+m.xTabs+'}'
 
 			else
 
-				thisChunk = +[{]+procobject(m.elem ,.f.,m.nonullarrayitem,m.amembersFlag)+[}]
+*** DH 2026-02-12: pass taProperties and tlNoCollectionName
+*   				thisChunk = +[{]+procobject(m.elem ,.f.,m.nonullarrayitem,m.amembersFlag)+[}]
+   				thisChunk = [{]+procobject(m.elem ,.f.,m.nonullarrayitem,m.amembersFlag, @taProperties, tlNoCollectionName)+[}]
    				este =  m.este+m.thisChunk
 
 			endif
@@ -337,7 +461,9 @@ valun = strtran(strtran(strtran(strtran(strtran(strtran(strtran(strtran(strtran(
 return m.valun
 
 *---------------------------------------------------------------
-Function procCollection(obt,nonullArrayItems,amembersFlag )
+*** DH 2026-02-12: accept taProperties and tlNoCollectionName
+*Function procCollection(obt,nonullArrayItems,amembersFlag )
+Function procCollection(obt,nonullArrayItems,amembersFlag, taProperties, tlNoCollectionName)
 *---------------------------------------------------------------
 
 local isCollection
@@ -375,7 +501,9 @@ With obt
 				m.este = m.este+'{'
 			endif
 
-			este = m.este+procObject(m.elem, m.isCollection , m.noNullArrayItem, m.aMembersFlag )
+*** DH 2026-02-12: pass taProperties
+*			este = m.este+procObject(m.elem, m.isCollection , m.noNullArrayItem, m.aMembersFlag )
+			este = m.este+procObject(m.elem, m.isCollection , m.noNullArrayItem, m.aMembersFlag, @taProperties, tlNoCollectionName)
 
 			este = m.este+'}'
 
