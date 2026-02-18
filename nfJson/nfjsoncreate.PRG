@@ -388,7 +388,7 @@ if isnull(m.valor)
 else
 
 	tvar = vartype(m.valor)
-	** no cambiar el orden de ejecución!
+	** no cambiar el orden de ejecuciÃ³n!
 	do case
 	case m.tvar $ 'FBYINQ'
 		vc = rtrim(cast( m.valor as c(32)))
